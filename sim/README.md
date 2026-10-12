@@ -25,8 +25,6 @@ docker compose --profile rcp up -d --build
 ./tests/verify.sh
 ```
 
-You need to be on the EPFL network (or the EPFL VPN) for `inference.rcp.epfl.ch`. Docker Desktop with the WSL2 backend works. If the kernel has no WireGuard module, the scripts fall back to `wireguard-go`.
-
 ## How each assumption is enforced
 
 | Assumption | Enforcement |
@@ -38,13 +36,3 @@ You need to be on the EPFL network (or the EPFL VPN) for `inference.rcp.epfl.ch`
 | Clinical segment has no way out | `clinical-net` is `internal: true`. |
 | Proof that the rule is port level | `meditron-llm` also listens on 8001 as a decoy. `verify.sh` expects it to be unreachable. |
 
-## Simulation artifacts to mention in the report
-
-- **Source attribution is lost.** Both the gateway and the firewall masquerade, so the LLM only ever sees the firewall address. This is realistic for a perimeter VPN and feeds the discussion on network position versus identity (NIST SP 800-207). `scenarios.sh` S3 shows it.
-- **RCP egress.** In the `rcp` profile the LLM container gets a second network (`llm-egress`) so it can call RCP. A real on-premise server would not need this. It is outside the clinician access path and is not exercised by the tests, but it should be stated as a limitation.
-- **`corp-ws`** is an extra host inside the corporate segment. It is there so the firewall rule can be tested from a non-VPN source and for the compromised-workstation scenario.
-- **Latency.** Everything runs on one host, so there are no realistic delay or loss numbers yet. The clinician container already has `NET_ADMIN`, so `tc netem` can be added later for the mobility and connectivity conditions, and the same harness can be reused for the Swisscom MPN side.
-
-## Status
-
-Compose file, scripts, and the LLM server were checked for syntax and the LLM server was run locally. The full topology has not been brought up yet because the sandbox it was written in cannot pull container images. First run on your machine is the real test, so expect to fix small things in the first pass.
