@@ -1,0 +1,106 @@
+# CHUV corporate network access (CNA) simulation, perimeter VPN baseline.
+#
+#  external-net 172.20.0.0/24     clinician  --WireGuard-->  vpn-gateway (DMZ)
+#  corp-net     10.20.0.0/24      vpn-gateway, corp-ws, corp-fw
+#  clinical-net 10.30.0.0/24      corp-fw, meditron-llm   (internal: no route out)
+#
+# Run:  docker compose --profile stub up -d --build      (stub LLM, no GPU needed)
+#       docker compose --profile rcp  up -d --build      (real Meditron through RCP)
+
+x-node: &node
+  build: ./image
+  image: cna-sim-node
+  restart: "no"
+
+networks:
+  external-net:
+    ipam: { config: [ { subnet: 172.20.0.0/24 } ] }
+  corp-net:
+    ipam: { config: [ { subnet: 10.20.0.0/24 } ] }
+  clinical-net:
+    internal: true            # nothing in this zone can reach the outside world
+    ipam: { config: [ { subnet: 10.30.0.0/24 } ] }
+  llm-egress:                 # only used by the rcp profile, see README "Simulation artifacts"
+    ipam: { config: [ { subnet: 172.21.0.0/24 } ] }
+
+volumes:
+  wg: {}
+
+services:
+  vpn-init:
+    <<: *node
+    container_name: vpn-init
+    command: ["sh", "/roles/vpn-init.sh"]
+    volumes: [ "./roles:/roles:ro", "wg:/wg" ]
+    networks: [ external-net ]
+
+  vpn-gateway:                # DMZ: the only host reachable from outside
+    <<: *node
+    container_name: vpn-gateway
+    command: ["sh", "/roles/vpn-gateway.sh"]
+    cap_add: [ NET_ADMIN ]
+    devices: [ "/dev/net/tun:/dev/net/tun" ]
+    sysctls: { net.ipv4.ip_forward: "1" }
+    volumes: [ "./roles:/roles:ro", "wg:/wg:ro" ]
+    depends_on: { vpn-init: { condition: service_completed_successfully } }
+    networks:
+      external-net: { ipv4_address: 172.20.0.2 }
+      corp-net:     { ipv4_address: 10.20.0.2 }
+
+  clinician:                  # simulated mobile clinician device, external zone
+    <<: *node
+    container_name: clinician
+    command: ["sh", "/roles/clinician.sh"]
+    cap_add: [ NET_ADMIN ]
+    devices: [ "/dev/net/tun:/dev/net/tun" ]
+    volumes: [ "./roles:/roles:ro", "wg:/wg:ro", "./tests:/tests:ro" ]
+    depends_on: { vpn-gateway: { condition: service_started } }
+    networks:
+      external-net: { ipv4_address: 172.20.0.10 }
+
+  corp-ws:                    # an ordinary staff workstation in the corporate segment
+    <<: *node
+    container_name: corp-ws
+    command: ["sh", "/roles/corp-ws.sh"]
+    cap_add: [ NET_ADMIN ]
+    volumes: [ "./roles:/roles:ro", "./tests:/tests:ro" ]
+    networks:
+      corp-net: { ipv4_address: 10.20.0.20 }
+
+  corp-fw:                    # internal firewall between corporate and clinical segments
+    <<: *node
+    container_name: corp-fw
+    command: ["sh", "/roles/corp-fw.sh"]
+    cap_add: [ NET_ADMIN ]
+    sysctls: { net.ipv4.ip_forward: "1" }
+    volumes: [ "./roles:/roles:ro" ]
+    networks:
+      corp-net:     { ipv4_address: 10.20.0.254 }
+      clinical-net: { ipv4_address: 10.30.0.254 }
+
+  meditron-llm:               # profile "stub": placeholder that mimics the inference API
+    build: ./image
+    image: cna-sim-node
+    container_name: meditron-llm
+    profiles: [ stub ]
+    command: ["python3", "/llm/server.py"]
+    environment: { LLM_MODE: stub }
+    volumes: [ "./llm:/llm:ro" ]
+    networks:
+      clinical-net: { ipv4_address: 10.30.0.10 }
+
+  meditron-llm-rcp:           # profile "rcp": same address, forwards to real Meditron on RCP
+    build: ./image
+    image: cna-sim-node
+    container_name: meditron-llm
+    profiles: [ rcp ]
+    command: ["python3", "/llm/server.py"]
+    environment:
+      LLM_MODE: rcp
+      RCP_BASE_URL: ${RCP_BASE_URL:-https://inference.rcp.epfl.ch/v1}
+      RCP_API_KEY: ${RCP_API_KEY:-}
+      RCP_MODEL: ${RCP_MODEL:-}
+    volumes: [ "./llm:/llm:ro" ]
+    networks:
+      clinical-net: { ipv4_address: 10.30.0.10 }
+      llm-egress:   { ipv4_address: 172.21.0.10 }
