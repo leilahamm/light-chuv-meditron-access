@@ -1,0 +1,18 @@
+# Run on 2026-10-14T16:30:42+02:00, profile stub
+--- before the flood (5 clinician requests: status and seconds) ---
+200 0.020221s
+200 0.003363s
+200 0.002528s
+200 0.003157s
+200 0.003140s
+--- flood from corp-ws: 5 rounds of 300 parallel requests ---
+--- during the flood (5 clinician requests) ---
+200 0.006060s
+200 0.006631s
+200 0.015050s
+200 0.006299s
+200 0.006476s
+--- after the flood (3 clinician requests) ---
+200 0.008048s
+200 0.014411s
+200 0.002067s
