@@ -1,0 +1,4 @@
+Marker found on the outer VPN leg (clinician eth0, WireGuard): 0  (expected 0)
+Marker found after the tunnel (corp-fw, plain HTTP):           2  (expected 1 or more)
+--- sample of what an on-path host reads after the tunnel ---
+{"messages":[{"role":"user","content":"T5-CANARY-patient-Jane-Doe-chest-pain"}]}
