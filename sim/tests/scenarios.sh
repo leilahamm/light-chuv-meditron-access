@@ -13,7 +13,7 @@ PublicKey = $(cat /wg/gw.pub)
 Endpoint = 172.20.0.2:51820
 AllowedIPs = 10.20.0.0/24, 10.30.0.0/24
 C
-  wg-quick up /etc/wg0.conf >/dev/null 2>&1 && curl -s -m 8 http://10.30.0.10:8000/v1/models && echo && echo "-> LLM reachable with copied key, no device check"'
+  wg-quick up /etc/wg0.conf >/dev/null 2>&1 && curl -s -m 8 http://10.30.0.10:8000/v1/models | head -c 150 && echo " ..." && echo "-> LLM reachable with copied key, no device check"'
 echo; echo "== S2 compromised corp workstation: lateral movement toward the clinical segment"
 docker exec corp-ws sh -c 'for p in 22 80 443 8000 8001 5432; do nc -z -w2 10.30.0.10 $p && echo "open $p" || echo "blocked $p"; done'
 echo; echo "== S3 what the LLM can attribute: source address seen for a clinician request"

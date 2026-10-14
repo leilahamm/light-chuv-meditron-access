@@ -1,0 +1,19 @@
+# Run on 2026-10-14T12:42:42+02:00, profile rcp
+== zone 1: external / clinician (before and after tunnel)
+PASS no tunnel: clinician cannot reach corp-ws                      expected=deny got=deny
+PASS no tunnel: clinician cannot reach LLM inference                expected=deny got=deny
+PASS no tunnel: gateway TCP/22 closed                               expected=deny got=deny
+== zone 2: DMZ gateway, authenticated corporate segment
+PASS tunnel: clinician reaches gateway (10.99.0.1)                  expected=allow got=allow
+PASS tunnel: clinician reaches corp-ws (corp segment)               expected=allow got=allow
+== zone 3: restricted clinical segment
+PASS tunnel: clinician -> LLM inference :8000                       expected=allow got=allow
+PASS tunnel: clinician -> LLM chat completion                       expected=allow got=allow
+PASS tunnel: clinician -> LLM admin decoy :8001 blocked             expected=deny got=deny
+PASS tunnel: clinician ping LLM blocked (no ICMP rule)              expected=deny got=deny
+PASS corp-ws -> LLM inference :8000                                 expected=allow got=allow
+PASS corp-ws -> LLM admin decoy :8001 blocked                       expected=deny got=deny
+PASS corp-ws ping LLM blocked                                       expected=deny got=deny
+PASS LLM cannot initiate to corp-ws (clinical->corp)                expected=deny got=deny
+
+passed=13 failed=0

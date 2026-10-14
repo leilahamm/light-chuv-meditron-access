@@ -1,0 +1,18 @@
+# Run on 2026-10-14T12:42:42+02:00, profile rcp
+== S1 stolen credential: a second host with a copy of the clinician key gets the same access
+{"data":[{"id":"BAAI/bge-m3","object":"model","created":1677610602,"owned_by":"openai"},{"id":"BAAI/bge-m3-float32","object":"model","created":1677610 ...
+-> LLM reachable with copied key, no device check
+
+== S2 compromised corp workstation: lateral movement toward the clinical segment
+blocked 22
+blocked 80
+blocked 443
+open 8000
+blocked 8001
+blocked 5432
+
+== S3 what the LLM can attribute: source address seen for a clinician request
+10:36:48 inference 10.30.0.254 "POST /v1/chat/completions HTTP/1.1" 200 -
+10:36:54 inference 10.30.0.254 "GET /v1/models HTTP/1.1" 200 -
+10:41:28 inference 10.30.0.254 "GET /v1/models HTTP/1.1" 200 -
+-> the endpoint sees only the firewall address, individual users are not distinguishable at network level
