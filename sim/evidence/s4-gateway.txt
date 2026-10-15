@@ -1,0 +1,14 @@
+# Run on 2026-10-15T13:51:25+02:00, profile rcp
+== S4 compromised VPN gateway
+-- reach: the gateway queries the LLM with no credential
+{"data":[{"id":"BAAI/bge-m3","object":"model","created":1677610602,"owned_by":"openai"},{"id":"BAAI/bge-m3-float32","obj
+-- ports reachable from the gateway
+blocked 22
+open 8000
+blocked 8001
+blocked 5432
+-- visibility: decrypted clinician traffic seen on the gateway's wg0 interface
+{"messages":[{"role":"user","content":"S4-CANARY-patient-John-Roe-diabetes-review"}]}
+-- persistence: the attacker registers their own VPN peer
+new peer registered (1 = yes): 1
+(test peer removed again)
