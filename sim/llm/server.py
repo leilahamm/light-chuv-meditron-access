@@ -14,6 +14,7 @@ MODE = os.environ.get("LLM_MODE", "stub")
 BASE = os.environ.get("RCP_BASE_URL", "").rstrip("/")
 KEY = os.environ.get("RCP_API_KEY", "")
 MODEL = os.environ.get("RCP_MODEL", "")
+SLOTS = threading.Semaphore(int(os.environ.get("STUB_CONCURRENCY", "1000000")))
 
 
 def log(msg):
@@ -57,6 +58,8 @@ class Inference(BaseHTTPRequestHandler):
             if MODEL and not body.get("model"):
                 body["model"] = MODEL
             return self._proxy("/chat/completions", body)
+        with SLOTS:   # at most STUB_CONCURRENCY requests are served at once, like a GPU with limited capacity
+            time.sleep(float(os.environ.get("STUB_DELAY", "0")))   # simulate a slow model
         self._send(200, {
             "id": "stub-1", "object": "chat.completion", "model": "meditron-stub",
             "choices": [{"index": 0, "finish_reason": "stop",

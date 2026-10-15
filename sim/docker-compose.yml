@@ -84,7 +84,7 @@ services:
     container_name: meditron-llm
     profiles: [ stub ]
     command: ["python3", "/llm/server.py"]
-    environment: { LLM_MODE: stub }
+    environment: { LLM_MODE: stub, STUB_DELAY: "${STUB_DELAY:-0}", STUB_CONCURRENCY: "${STUB_CONCURRENCY:-1000000}" }
     volumes: [ "./llm:/llm:ro" ]
     networks:
       clinical-net: { ipv4_address: 10.30.0.10 }
