@@ -1,0 +1,41 @@
+dn: dc=chuv-sim,dc=local
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+o: CNA Simulation
+dc: chuv-sim
+
+dn: ou=people,dc=chuv-sim,dc=local
+objectClass: organizationalUnit
+ou: people
+
+dn: ou=policies,dc=chuv-sim,dc=local
+objectClass: organizationalUnit
+ou: policies
+
+dn: cn=default,ou=policies,dc=chuv-sim,dc=local
+objectClass: person
+objectClass: pwdPolicy
+cn: default
+sn: default
+pwdAttribute: userPassword
+pwdLockout: TRUE
+pwdMaxFailure: 5
+pwdFailureCountInterval: 60
+pwdLockoutDuration: 1200
+pwdMustChange: FALSE
+pwdAllowUserChange: TRUE
+
+dn: uid=dr.martin,ou=people,dc=chuv-sim,dc=local
+objectClass: inetOrgPerson
+uid: dr.martin
+cn: Dr Martin
+sn: Martin
+userPassword: Clinician-Pass-1
+
+dn: uid=dr.lockout,ou=people,dc=chuv-sim,dc=local
+objectClass: inetOrgPerson
+uid: dr.lockout
+cn: Dr Lockout (test account)
+sn: Lockout
+userPassword: Lockout-Pass-1

@@ -5,6 +5,8 @@ Port 8001  decoy management endpoint. The firewall must block it, which proves t
            "inference port only" rule is enforced at port level.
 
 LLM_MODE=stub  canned answer, no GPU, deterministic latency
+LLM_TLS=on     (default) HTTPS on the inference port with a certificate from the hospital CA;
+               LLM_TLS=off serves plain HTTP (variant used to show what a plaintext leg exposes)
 LLM_MODE=rcp   forwards the request to EPFL RCP (real Meditron weights)
 """
 import json, os, ssl, sys, threading, time, urllib.request, urllib.error
@@ -14,6 +16,7 @@ MODE = os.environ.get("LLM_MODE", "stub")
 BASE = os.environ.get("RCP_BASE_URL", "").rstrip("/")
 KEY = os.environ.get("RCP_API_KEY", "")
 MODEL = os.environ.get("RCP_MODEL", "")
+TLS = os.environ.get("LLM_TLS", "on") == "on"
 SLOTS = threading.Semaphore(int(os.environ.get("STUB_CONCURRENCY", "1000000")))
 
 
@@ -40,7 +43,7 @@ class Inference(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def log_message(self, fmt, *a):
-        log("inference %s %s" % (self.client_address[0], fmt % a))
+        log("inference src=%s %s" % (self.client_address[0], fmt % a))
 
     def do_GET(self):
         if self.path == "/v1/models":
@@ -95,8 +98,15 @@ class Admin(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     port_i = int(os.environ.get("INFERENCE_PORT", 8000))
     port_a = int(os.environ.get("ADMIN_PORT", 8001))
-    log("meditron-llm mode=%s inference=%d admin-decoy=%d" % (MODE, port_i, port_a))
+    log("meditron-llm mode=%s inference=%d admin-decoy=%d (decoy is plain HTTP)" % (MODE, port_i, port_a))
     if MODE == "rcp" and not (BASE and KEY):
         sys.exit("LLM_MODE=rcp needs RCP_BASE_URL and RCP_API_KEY (see .env.example)")
     threading.Thread(target=ThreadingHTTPServer(("0.0.0.0", port_a), Admin).serve_forever, daemon=True).start()
-    ThreadingHTTPServer(("0.0.0.0", port_i), Inference).serve_forever()
+    srv = ThreadingHTTPServer(("0.0.0.0", port_i), Inference)
+    if TLS:
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        ctx.load_cert_chain("/pki/llm/llm.crt", "/pki/llm/llm.key")
+        srv.socket = ctx.wrap_socket(srv.socket, server_side=True, do_handshake_on_connect=False)
+    log("inference scheme=%s" % ("https" if TLS else "http"))
+    srv.serve_forever()
