@@ -1,4 +1,8 @@
 # light-chuv-meditron-access
-Simulated network and threat-model comparison of CHUV Corporate Network Access vs. Swisscom Mobile Private Network (MPN) for secure mobile access to an on-premise Meditron clinical LLM
+Secure mobile access to an on-premise Meditron LLM in a hospital setting
+(semester project, LiGHT lab, EPFL). Compares a perimeter-VPN baseline
+with Swisscom MPN Light.
 
-EPFL LiGHT lab semester project.
+## Contents
+- `sim/`: Docker simulation of a hospital network with VPN access
+  (baseline and TOTP variant). See `sim/README.md` to run it and the tests.
