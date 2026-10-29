@@ -13,10 +13,10 @@ t() { # name, expected(allow|deny), container ("host" = run on the host), comman
 }
 chat='{"messages":[{"role":"user","content":"ping"}]}'
 LDAPBASE="dc=chuv-sim,dc=local"
-reset_lock() { # lockout state is operational data and cannot be edited: delete and re-add the test account
-  docker exec -e LDAPTLS_REQCERT=never directory sh -c "
-    ldapdelete -x -H ldaps://127.0.0.1 -D cn=admin,$LDAPBASE -w AdminSimPass-1 uid=dr.lockout,ou=people,$LDAPBASE
-    printf 'dn: uid=dr.lockout,ou=people,$LDAPBASE\\nobjectClass: inetOrgPerson\\nuid: dr.lockout\\ncn: Dr Lockout (test account)\\nsn: Lockout\\nuserPassword: Lockout-Pass-1\\n' | ldapadd -x -H ldaps://127.0.0.1 -D cn=admin,$LDAPBASE -w AdminSimPass-1" >/dev/null 2>&1
+reset_lock() { # clear the lockout state of the test account so the script can be rerun
+  for a in pwdAccountLockedTime pwdFailureTime; do
+    docker exec -e LDAPTLS_REQCERT=never directory sh -c "printf 'dn: uid=dr.lockout,ou=people,$LDAPBASE\nchangetype: modify\ndelete: $a\n' | ldapmodify -x -H ldaps://127.0.0.1 -D cn=admin,$LDAPBASE -w AdminSimPass-1" >/dev/null 2>&1
+  done
 }
 echo "mfa=$(docker exec vpn-gateway printenv MFA)  llm-scheme=$SCHEME"
 reset_lock; vpn_down
@@ -36,11 +36,17 @@ if [ "$(docker exec vpn-gateway printenv MFA)" = totp ]; then
 fi
 t "named account works before any failure (dr.lockout)"    allow clinician env VPN_USER=dr.lockout VPN_PASS=Lockout-Pass-1 sh /roles/vpn-up.sh
 vpn_down
-# failed logins go through the gateway's own login script: same directory path, about 1 s each,
-# so all five fall inside the 60 s counting window of the policy
-LOGIN="env MFA=none username=dr.lockout common_name=lockout-test untrusted_ip=172.20.0.10 /usr/local/bin/auth-ldap.sh"
-for i in 1 2 3 4 5; do docker exec vpn-gateway env password=bad $LOGIN >/dev/null 2>&1; done
-t "5 failed logins lock the account (correct password denied)" deny vpn-gateway env password=Lockout-Pass-1 $LOGIN
+# Failed logins go straight to the gateway's login check, so all 5 land inside the 60 s failure window
+# (5 full VPN attempts can take longer than that and the failures then expire).
+# With MFA=totp the login check reads the code first, so a failed login must carry a valid code
+# and a wrong password to reach the directory and count as a failure there.
+for i in 1 2 3 4 5; do
+  docker exec -e common_name=clinician-device-01 -e untrusted_ip=172.20.0.10 vpn-gateway sh -c '
+    pw=bad
+    if [ "${MFA:-none}" = totp ]; then pw="bad$(oathtool --totp -b "$(cat /pki/gw/totp-dr.lockout 2>/dev/null || cat /pki/gw/totp-dr.martin)")"; fi
+    username=dr.lockout password="$pw" sh /usr/local/bin/auth-ldap.sh' >/dev/null 2>&1
+done
+t "5 failed logins lock the account (correct password denied)" deny clinician env VPN_USER=dr.lockout VPN_PASS=Lockout-Pass-1 sh /roles/vpn-up.sh
 t "failed logins are logged with user and source"          allow vpn-gateway grep -q 'user=dr.lockout.*result=FAIL' /var/log/vpn-auth.log
 reset_lock
 
@@ -56,6 +62,10 @@ t "DMZ: gateway cannot reach the LLM from its own address" deny  vpn-gateway $CU
 
 echo "== zone 3: restricted clinical segment"
 t "tunnel: clinician -> LLM inference :8000"               allow clinician $CU -s -m 8 -f $URL/v1/models
+# first chat call after start-up can be slow or fail against the real model (cold start on RCP).
+# Do it once, show the status and time, so a failure below can be read against it.
+echo "-- warm-up chat request (informational, not counted)"
+docker exec clinician sh -c "$CU -s -m 90 -o /dev/null -w 'warm-up: HTTP %{http_code} in %{time_total}s\n' -H 'Content-Type: application/json' -d '$chat' $URL/v1/chat/completions" || echo "warm-up: no answer"
 t "tunnel: clinician -> LLM chat completion"               allow clinician sh -c "$CU -s -m 60 -f -H 'Content-Type: application/json' -d '$chat' $URL/v1/chat/completions"
 t "tunnel: clinician -> LLM admin decoy :8001 blocked"     deny  clinician curl -s -m 4 -f http://$LLM:8001/
 t "tunnel: clinician ping LLM blocked (no ICMP rule)"      deny  clinician ping -c1 -W2 $LLM
@@ -68,9 +78,6 @@ if [ "$SCHEME" = https ]; then
   t "LLM endpoint is TLS: plain HTTP on 8000 does not answer" deny clinician curl -s -m 4 -f http://$LLM:8000/v1/models
 fi
 
-if [ "$(docker exec meditron-llm printenv LLM_MODE)" = stub ]; then
-  t "clinical segment has no way out (LLM cannot reach the internet)" deny meditron-llm ping -c1 -W2 1.1.1.1
-fi
 echo "== logging (H.TEC.23): the LLM sees the tunnel address, the gateway maps it to a user"
 t "LLM log shows a tunnel source address (no NAT)"         allow host sh -c "docker logs meditron-llm 2>&1 | grep -q 'src=10.99.0.'"
 t "gateway session log maps the tunnel address to the user" allow vpn-gateway grep -q 'event=client-connect user=dr.martin' /var/log/vpn-sessions.log

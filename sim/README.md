@@ -32,6 +32,7 @@ docker compose --profile stub up -d --build     # first start creates the PKI, w
 ./tests/verify.sh                               # authentication, reachability and logging matrix
 ./tests/scenarios.sh                            # S1 stolen credentials, S2 lateral movement, S3 attribution
 ./tests/s4-gateway.sh                           # S4 compromised gateway
+./tests/scenarios-compromised-nodes.sh          # S5 to S8 compromised directory, LLM host, firewalls, VPN service
 ./tests/t5-capture.sh                           # T5 are prompts readable on the wire
 docker compose --profile stub --profile rcp down -v
 ```
@@ -93,6 +94,7 @@ These are simulation values only. The TOTP seed for both is fixed (`JBSWY3DPEHPK
 | `scenarios.sh` S1 | A second host with the stolen certificate and key: without password, with password, with password and TOTP seed. | One stolen laptop is enough in the baseline. TOTP needs the phone as well. |
 | `scenarios.sh` S2 | Compromised corporate workstation probes the LLM and the directory. | Only port 8000 is open, but any corporate host can use it. |
 | `scenarios.sh` S3 | Attribution: LLM log versus gateway session log. | The LLM sees only the tunnel address. Two logs must be joined. |
+| `scenarios-compromised-nodes.sh` S5 to S8 | Nodes assumed compromised: directory (adds an account), LLM host (what it can reach), firewalls (rule inserted), VPN service (malformed packets, not an exploit). | The certificate and the directory are independent checks. Firewall rules are the only barrier. The LLM host reaches nothing outside its segment in the stub profile. In the rcp profile it has a route to the internet through the egress network. |
 | `s4-gateway.sh` | Attacker with a shell on the gateway. | Blocked from its own address, but a tunnel address as source reaches the LLM. |
 | `t5-capture.sh` | Prompt marker on the outer VPN leg and after the tunnel. | TLS on the LLM protects prompts inside the network. |
 | `t6-flood.sh` | Flood from a corporate host against a limited stub. | No per-source limit, so one host delays the clinician. |
